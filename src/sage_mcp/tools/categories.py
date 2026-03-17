@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
+from fastmcp import Context
 from fastmcp.exceptions import ToolError
 from pydantic import Field
 
@@ -22,13 +23,13 @@ async def get_categories(
         Field(description="Parent category ID for subcategories"),
     ] = None,
     *,
-    ctx: object,
+    ctx: Context,
 ) -> CategoriesResponse:
     """Browse SAGE product categories, themes, colors, or ESG flags.
 
     Use list_type to select which taxonomy. Pass parent_id to drill into subcategories.
     """
-    client: SageClient = ctx.lifespan_context["sage_client"]  # type: ignore[union-attr]
+    client: SageClient = ctx.lifespan_context["sage_client"]
     try:
         return await client.get_categories(list_type=list_type, parent_id=parent_id)
     except SageAPIError as e:

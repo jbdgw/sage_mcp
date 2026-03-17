@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
+from fastmcp import Context
 from fastmcp.exceptions import ToolError
 from pydantic import Field
 
@@ -15,13 +16,13 @@ from sage_mcp.types.responses import InventoryResponse
 async def check_inventory(
     product_id: Annotated[str, Field(description="Product entity ID to check inventory for")],
     *,
-    ctx: object,
+    ctx: Context,
 ) -> InventoryResponse:
     """Check real-time inventory levels for a promotional product.
 
     Returns warehouse stock levels, available quantities, and lead times.
     """
-    client: SageClient = ctx.lifespan_context["sage_client"]  # type: ignore[union-attr]
+    client: SageClient = ctx.lifespan_context["sage_client"]
     try:
         return await client.check_inventory(product_id=product_id)
     except SageAPIError as e:

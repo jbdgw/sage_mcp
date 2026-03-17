@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
+from fastmcp import Context
 from fastmcp.exceptions import ToolError
 from pydantic import Field
 
@@ -34,14 +35,14 @@ async def search_products(
     page_number: Annotated[int | None, Field(description="Page number (1-based)")] = None,
     limit: Annotated[int | None, Field(description="Max results to return")] = None,
     *,
-    ctx: object,
+    ctx: Context,
 ) -> SearchResponse:
     """Search the SAGE promotional products catalog.
 
     Provide at least one search criterion (keywords, categories, or spc).
     Returns matching products with pricing, thumbnails, and metadata.
     """
-    client: SageClient = ctx.lifespan_context["sage_client"]  # type: ignore[union-attr]
+    client: SageClient = ctx.lifespan_context["sage_client"]
 
     search = SearchRec(
         keywords=keywords,
