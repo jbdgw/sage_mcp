@@ -10,6 +10,7 @@ from fastmcp import FastMCP
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from sage_mcp.auth import ApiKeyAuthMiddleware
 from sage_mcp.client.sage_client import SageClient
 from sage_mcp.settings import SageSettings, ServerSettings
 from sage_mcp.tools.categories import get_categories
@@ -62,6 +63,22 @@ mcp.tool(get_product_images)
 @mcp.custom_route("/health", methods=["GET"])
 async def health_check(request: Request) -> JSONResponse:
     return JSONResponse({"status": "healthy"})
+
+
+def _build_app() -> Any:
+    """Build the production ASGI app with auth middleware."""
+    server_settings = ServerSettings()  # type: ignore[call-arg]
+    asgi_app = mcp.http_app(transport="streamable-http")
+    api_key = server_settings.api_key
+    asgi_app.add_middleware(
+        ApiKeyAuthMiddleware,
+        api_key=api_key.get_secret_value() if api_key else None,
+    )
+    return asgi_app
+
+
+# Module-level ASGI app for uvicorn: `uvicorn sage_mcp.server:app`
+app = _build_app()
 
 
 def main() -> None:

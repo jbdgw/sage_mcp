@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import SecretStr
+from pydantic import AliasChoices, Field, SecretStr
 from pydantic_settings import BaseSettings
 
 
@@ -24,6 +24,10 @@ class ServerSettings(BaseSettings):
 
     model_config = {"env_prefix": "MCP_"}
 
-    host: str = "127.0.0.1"
-    port: int = 9000
+    host: str = "0.0.0.0"
+    port: int = Field(
+        default=9000,
+        validation_alias=AliasChoices("MCP_PORT", "PORT"),
+    )
     transport: Literal["http", "stdio"] = "http"
+    api_key: SecretStr | None = None
