@@ -68,7 +68,7 @@ async def health_check(request: Request) -> JSONResponse:
 def _build_app() -> Any:
     """Build the production ASGI app with auth middleware."""
     server_settings = ServerSettings()  # type: ignore[call-arg]
-    asgi_app = mcp.http_app(transport="streamable-http")
+    asgi_app = mcp.http_app(transport="streamable-http", stateless_http=True)
     api_key = server_settings.api_key
     asgi_app.add_middleware(
         ApiKeyAuthMiddleware,
