@@ -6,8 +6,9 @@ the SAGE API may return without breaking deserialization.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
+_PROD_EID_ALIAS = AliasChoices("prodEid", "prodEId")
 
 # --- Search (Service 103) ---
 
@@ -15,9 +16,9 @@ from pydantic import BaseModel, Field
 class ProductSearchHit(BaseModel):
     """A single product from search results."""
 
-    model_config = {"extra": "allow"}
+    model_config = {"extra": "allow", "populate_by_name": True}
 
-    prodEId: int = Field(description="Product entity ID")
+    prodEId: int = Field(description="Product entity ID", validation_alias=_PROD_EID_ALIAS)
     spc: str = Field(default="", description="SAGE product code")
     name: str = Field(default="", description="Product name")
     prc: str = Field(default="", description="Price range string (e.g. '0.66 - 1.42')")
@@ -72,9 +73,9 @@ class ProductImage(BaseModel):
 class ProductDetail(BaseModel):
     """Full product detail from Service 105."""
 
-    model_config = {"extra": "allow"}
+    model_config = {"extra": "allow", "populate_by_name": True}
 
-    prodEId: int = Field(description="Product entity ID")
+    prodEId: int = Field(description="Product entity ID", validation_alias=_PROD_EID_ALIAS)
     category: str = Field(default="", description="Product category")
     suppId: int = Field(default=0, description="Supplier ID")
     lineName: str = Field(default="", description="Product line name")
