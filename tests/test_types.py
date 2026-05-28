@@ -162,6 +162,32 @@ class TestSearchResponse:
         resp = SearchResponse.model_validate({"ok": True, "totalFound": 0, "products": []})
         assert resp.products == []
 
+    def test_search_hit_parses_suppid_from_extra_return_fields(self) -> None:
+        raw = {
+            "ok": True,
+            "totalFound": 1,
+            "products": [
+                {
+                    "prodEId": 771822521,
+                    "spc": "FBJGK-GMSTH",
+                    "name": "Mini Flashlight Key Ring",
+                    "prc": "0.66 - 1.42",
+                    "thumbPic": "https://example.com/pic.jpg",
+                    "SUPPID": 50000,
+                    "SUPPLIER": "Leed's",
+                }
+            ],
+        }
+        resp = SearchResponse.model_validate(raw)
+        assert resp.products[0].suppId == 50000
+        assert resp.products[0].supplier == "Leed's"
+
+    def test_search_hit_suppid_defaults_to_none_when_absent(self) -> None:
+        hit = ProductSearchHit.model_validate(
+            {"prodEId": 1, "spc": "ABC", "name": "Test", "prc": "1.00", "thumbPic": ""}
+        )
+        assert hit.suppId is None
+
     def test_extra_fields_preserved(self) -> None:
         raw = {"ok": True, "totalFound": 0, "products": [], "newSageField": "surprise"}
         resp = SearchResponse.model_validate(raw)

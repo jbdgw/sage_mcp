@@ -60,6 +60,8 @@ SEARCH_RESPONSE_OK: dict[str, Any] = {
             "name": "Mini Flashlight Key Ring",
             "prc": "0.66 - 1.42",
             "thumbPic": "https://www.promoplace.com/ws/ws.dll/QPic?SN=50000&P=771822521&RS=150",
+            "SUPPID": 50000,
+            "SUPPLIER": "Leed's",
         },
         {
             "prodEId": 999000111,
@@ -67,6 +69,8 @@ SEARCH_RESPONSE_OK: dict[str, Any] = {
             "name": "LED Pen Light",
             "prc": "1.20 - 3.50",
             "thumbPic": "https://www.promoplace.com/ws/ws.dll/QPic?SN=50000&P=999000111&RS=150",
+            "SUPPID": 60200,
+            "SUPPLIER": "Hit Promotional Products",
         },
     ],
 }

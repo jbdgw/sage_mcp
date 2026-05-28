@@ -30,6 +30,7 @@ class ProductSearchHit(BaseModel):
     colors: str | None = Field(None, alias="COLORS")
     themes: str | None = Field(None, alias="THEMES")
     supplier: str | None = Field(None, alias="SUPPLIER")
+    suppId: int | None = Field(None, alias="SUPPID", description="Supplier ID")
     lineName: str | None = Field(None, alias="LINE")
     prodTime: str | None = Field(None, alias="PRODTIME")
     itemNum: str | None = Field(None, alias="ITEMNUM")

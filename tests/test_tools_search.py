@@ -68,7 +68,19 @@ class TestSearchProductsTool:
         assert search_rec.envFriendly is True
         assert search_rec.limit == 50
 
-    async def test_default_extra_return_fields(
+    async def test_search_results_include_supp_id(
+        self, mock_sage_client: AsyncMock, mock_context: AsyncMock
+    ) -> None:
+        from sage_mcp.tools.search import search_products
+
+        mock_sage_client.search_products.return_value = SearchResponse.model_validate(
+            SEARCH_RESPONSE_OK
+        )
+        result = await search_products(keywords="flashlight", ctx=mock_context)
+        assert result.products[0].suppId == 50000
+        assert result.products[1].suppId == 60200
+
+    async def test_default_extra_return_fields_include_suppid(
         self, mock_sage_client: AsyncMock, mock_context: AsyncMock
     ) -> None:
         from sage_mcp.tools.search import search_products
@@ -80,6 +92,7 @@ class TestSearchProductsTool:
         call_args = mock_sage_client.search_products.call_args
         search_rec = call_args[0][0]
         assert search_rec.extraReturnFields is not None
+        assert "SUPPID" in search_rec.extraReturnFields
         assert "CATEGORY" in search_rec.extraReturnFields
 
     async def test_sage_api_error_raises_tool_error(

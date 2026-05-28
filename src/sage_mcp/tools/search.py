@@ -13,7 +13,7 @@ from sage_mcp.types.errors import SageAPIError
 from sage_mcp.types.requests import SearchRec
 from sage_mcp.types.responses import SearchResponse
 
-_DEFAULT_EXTRA_FIELDS = "ITEMNUM,CATEGORY,DESCRIPTION,COLORS,THEMES,SUPPLIER,LINE,PRODTIME"
+_DEFAULT_EXTRA_FIELDS = "ITEMNUM,CATEGORY,DESCRIPTION,COLORS,THEMES,SUPPLIER,SUPPID,LINE,PRODTIME"
 
 
 async def search_products(
