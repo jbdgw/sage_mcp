@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import re
 from typing import Any, Sequence
 
 import httpx
@@ -15,6 +17,27 @@ from sage_mcp.types.responses import (
     ProductDetailResponse,
     SearchResponse,
 )
+
+
+_TRAILING_COMMA_RE = re.compile(r",\s*(?=[}\]])")
+
+
+def _parse_response_json(response: httpx.Response) -> dict[str, Any]:
+    """Parse a SAGE response body, repairing trailing commas.
+
+    SAGE emits malformed JSON for some Service 107 products (observed live
+    2026-07-09, prodEId 318117716) — a trailing comma before }/].
+    """
+    try:
+        data: dict[str, Any] = response.json()
+        return data
+    except ValueError:
+        pass
+    try:
+        repaired: dict[str, Any] = json.loads(_TRAILING_COMMA_RE.sub("", response.text))
+        return repaired
+    except ValueError as e:
+        raise SageAPIError(err_num=0, err_msg=f"SAGE returned malformed JSON: {e}") from e
 
 
 def _extract_error(data: dict[str, Any]) -> tuple[int, str]:
@@ -55,7 +78,7 @@ class SageClient:
             timeout=self._settings.request_timeout_seconds,
         )
         response.raise_for_status()
-        data: dict[str, Any] = response.json()
+        data = _parse_response_json(response)
 
         err_num, err_msg = _extract_error(data)
         if err_num != 0:

@@ -75,6 +75,37 @@ class TestClientPost:
         result = await sage_client._post({"serviceId": 103})
         assert result["ok"] is True
 
+    async def test_repairs_trailing_comma_json(
+        self, sage_client: SageClient, mock_http_client: AsyncMock
+    ) -> None:
+        """SAGE emits malformed JSON (trailing commas) for some Service 107
+        products (observed live: prodEId 318117716) — repair instead of crash."""
+        import httpx
+
+        broken = '{"ok": true, "products": [{"productId": 8117716, "onHand": 5, "skus": [],}],}'
+        mock_http_client.post.return_value = httpx.Response(
+            status_code=200,
+            content=broken.encode(),
+            headers={"content-type": "application/json"},
+            request=httpx.Request("POST", "https://www.promoplace.com/ws/ws.dll/ConnectAPI"),
+        )
+        result = await sage_client._post({"serviceId": 107})
+        assert result["products"][0]["productId"] == 8117716
+
+    async def test_unrepairable_json_raises_sage_api_error(
+        self, sage_client: SageClient, mock_http_client: AsyncMock
+    ) -> None:
+        import httpx
+
+        mock_http_client.post.return_value = httpx.Response(
+            status_code=200,
+            content=b"<html>gateway error</html>",
+            headers={"content-type": "application/json"},
+            request=httpx.Request("POST", "https://www.promoplace.com/ws/ws.dll/ConnectAPI"),
+        )
+        with pytest.raises(SageAPIError, match="malformed"):
+            await sage_client._post({"serviceId": 107})
+
 
 # --- Auth block ---
 
