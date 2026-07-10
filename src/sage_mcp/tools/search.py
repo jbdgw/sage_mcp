@@ -18,7 +18,8 @@ from sage_mcp.types.responses import SearchResponse
 _LEAN_EXTRA_FIELDS = "ITEMNUM,CATEGORY,SUPPLIER,SUPPID,LINE,PRODTIME"
 _VERBOSE_EXTRA_FIELDS = _LEAN_EXTRA_FIELDS + ",DESCRIPTION,COLORS,THEMES"
 
-_MAX_LIMIT = 100
+_MAX_LIMIT = 250
+_DEFAULT_LIMIT = 25
 
 
 async def search_products(
@@ -54,9 +55,16 @@ async def search_products(
         Field(description="Sort order: BESTMATCH (default), PRICE, PRICEHIGHLOW, POPULARITY, PREFGROUP"),
     ] = None,
     limit: Annotated[
-        int, Field(description="Results per page (1-100)", ge=1, le=_MAX_LIMIT)
-    ] = 25,
-    page: Annotated[int, Field(description="Page number (1-based)", ge=1)] = 1,
+        int | None, Field(description="Results per page (1-250, default 25)", ge=1, le=_MAX_LIMIT)
+    ] = None,
+    page: Annotated[int | None, Field(description="Page number (1-based)", ge=1)] = None,
+    page_size: Annotated[
+        int | None,
+        Field(description="Deprecated alias for limit", ge=1, le=_MAX_LIMIT),
+    ] = None,
+    page_number: Annotated[
+        int | None, Field(description="Deprecated alias for page", ge=1)
+    ] = None,
     include_descriptions: Annotated[
         bool,
         Field(description="Include DESCRIPTION/COLORS/THEMES per product (~3x payload)"),
@@ -71,6 +79,8 @@ async def search_products(
     count so you can paginate with the page parameter.
     """
     client: SageClient = ctx.lifespan_context["sage_client"]
+    effective_limit = limit or page_size or _DEFAULT_LIMIT
+    effective_page = page or page_number or 1
 
     search = SearchRec(
         keywords=keywords,
@@ -91,8 +101,8 @@ async def search_products(
         suppId=supplier_id,
         lineName=line_name,
         sort=sort,
-        maxRecs=limit,
-        startNum=(page - 1) * limit + 1,
+        maxRecs=effective_limit,
+        startNum=(effective_page - 1) * effective_limit + 1,
         extraReturnFields=_VERBOSE_EXTRA_FIELDS if include_descriptions else _LEAN_EXTRA_FIELDS,
     )
     try:

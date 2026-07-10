@@ -71,6 +71,34 @@ class TestSearchProductsTool:
         assert rec.maxRecs == 50
         assert rec.startNum == 101  # (3-1)*50 + 1
 
+    async def test_deprecated_page_size_alias_still_works(
+        self, mock_sage_client: AsyncMock, mock_context: AsyncMock
+    ) -> None:
+        """Consuming apps (grid search) send page_size: 250 — must not be
+        rejected or silently dropped to the 25-result default."""
+        from sage_mcp.tools.search import search_products
+
+        mock_sage_client.search_products.return_value = SearchResponse.model_validate(
+            SEARCH_RESPONSE_OK
+        )
+        await search_products(
+            keywords="tumbler", page_size=250, page_number=2, ctx=mock_context
+        )
+        rec = sent_search_rec(mock_sage_client)
+        assert rec.maxRecs == 250
+        assert rec.startNum == 251
+
+    async def test_explicit_limit_wins_over_page_size(
+        self, mock_sage_client: AsyncMock, mock_context: AsyncMock
+    ) -> None:
+        from sage_mcp.tools.search import search_products
+
+        mock_sage_client.search_products.return_value = SearchResponse.model_validate(
+            SEARCH_RESPONSE_OK
+        )
+        await search_products(keywords="pen", limit=100, page_size=250, ctx=mock_context)
+        assert sent_search_rec(mock_sage_client).maxRecs == 100
+
     async def test_passes_filter_params_to_client(
         self, mock_sage_client: AsyncMock, mock_context: AsyncMock
     ) -> None:
