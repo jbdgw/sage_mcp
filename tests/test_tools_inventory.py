@@ -102,6 +102,34 @@ class TestCheckInventoryTool:
         assert result.products[0].onHand == 56341
         assert result.products[0].prodEId == 105917761
 
+    async def test_malformed_batch_isolates_per_product(
+        self, mock_sage_client: AsyncMock, mock_context: AsyncMock
+    ) -> None:
+        """One poison record (SAGE emits unparseable JSON, err_num 0) must not
+        take down the whole batch — isolate and keep the good results."""
+        from sage_mcp.tools.inventory import check_inventory
+
+        malformed = SageAPIError(0, "SAGE returned malformed JSON")
+        mock_sage_client.check_inventory.side_effect = [
+            malformed,  # batch attempt
+            InventoryResponse.model_validate(INVENTORY_107_OK),  # 105917761 alone
+            malformed,  # 318117716 alone — still poisoned
+            InventoryResponse.model_validate({"ok": False, "products": []}),  # item-num path
+        ]
+        mock_sage_client.get_product_detail.return_value = (
+            ProductDetailResponse.model_validate(DETAIL_RESPONSE_OK)
+        )
+        result = await check_inventory(
+            product_ids=[105917761, 318117716], ctx=mock_context
+        )
+        assert len(result.products) == 2
+        good, poisoned = result.products
+        assert good.prodEId == 105917761
+        assert good.ok is True
+        assert good.onHand == 56341
+        assert poisoned.prodEId == 318117716
+        assert poisoned.ok is not True
+
     async def test_supplier_item_num_lookup_without_product_ids(
         self, mock_sage_client: AsyncMock, mock_context: AsyncMock
     ) -> None:
