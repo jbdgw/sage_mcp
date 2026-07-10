@@ -284,7 +284,10 @@ class InventoryProduct(BaseModel):
 
     model_config = {"extra": "ignore"}
 
-    productId: int = Field(default=0, description="SAGE product ID (prodEId)")
+    productId: int = Field(default=0, description="SAGE-internal Service 107 product ID")
+    prodEId: int | None = Field(
+        default=None, description="The prodEId this entry answers (set by the MCP server)"
+    )
     sageNum: int | None = Field(default=None, description="Supplier's SAGE #")
     itemNum: int | str | None = Field(default=None, description="Supplier's item number")
     ok: bool | None = None

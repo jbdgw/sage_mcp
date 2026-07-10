@@ -8,8 +8,8 @@ import pytest
 
 from sage_mcp.client.sage_client import SageClient
 from sage_mcp.types.errors import SageAPIError
-from sage_mcp.types.responses import InventoryResponse
-from tests.conftest import INVENTORY_RESPONSE_OK
+from sage_mcp.types.responses import InventoryResponse, ProductDetailResponse
+from tests.conftest import DETAIL_RESPONSE_OK, INVENTORY_RESPONSE_OK
 
 
 @pytest.fixture
@@ -24,19 +24,48 @@ def mock_context(mock_sage_client: AsyncMock) -> AsyncMock:
     return ctx
 
 
+# Service 107 answers with its internal id (prodEId minus 2-digit prefix)
+INVENTORY_107_OK = {
+    "ok": True,
+    "products": [
+        {
+            "productId": 5917761,
+            "sageNum": 60462,
+            "itemNum": "DBT-AT19",
+            "ok": True,
+            "onHand": 56341,
+            "skus": [
+                {"attributes": [{"typeId": 10, "value": "Black"}], "onHand": 5991, "onOrder": 0}
+            ],
+            "lastUpdated": "2026-07-10T00:00:29Z",
+        }
+    ],
+}
+
+INVENTORY_107_NOT_FOUND = {
+    "ok": False,
+    "products": [
+        {"productId": 5917761, "sageNum": 0, "itemNum": "", "ok": False, "onHand": 0, "skus": []}
+    ],
+}
+
+
 class TestCheckInventoryTool:
-    async def test_happy_path_returns_inventory(
+    async def test_prod_eid_translated_to_service_107_id(
         self, mock_sage_client: AsyncMock, mock_context: AsyncMock
     ) -> None:
+        """Live 2026-07-09: 107 productId is the 9-digit prodEId minus its
+        2-digit prefix (105917761 -> 5917761); raw prodEIds return ok=false."""
         from sage_mcp.tools.inventory import check_inventory
 
         mock_sage_client.check_inventory.return_value = InventoryResponse.model_validate(
-            INVENTORY_RESPONSE_OK
+            INVENTORY_107_OK
         )
         result = await check_inventory(product_ids=[105917761], ctx=mock_context)
-        assert len(result.products) == 1
+        refs = mock_sage_client.check_inventory.call_args.kwargs["products"]
+        assert refs[0].productId == 5917761
         assert result.products[0].onHand == 56341
-        assert result.products[0].skus[0].onHand == 5991
+        assert result.products[0].prodEId == 105917761  # caller's id restored
 
     async def test_batches_multiple_product_ids_in_one_call(
         self, mock_sage_client: AsyncMock, mock_context: AsyncMock
@@ -46,18 +75,40 @@ class TestCheckInventoryTool:
         mock_sage_client.check_inventory.return_value = InventoryResponse.model_validate(
             INVENTORY_RESPONSE_OK
         )
-        await check_inventory(product_ids=[105917761, 771822521], ctx=mock_context)
-        refs = mock_sage_client.check_inventory.call_args.kwargs["products"]
-        assert [r.productId for r in refs] == [105917761, 771822521]
+        await check_inventory(product_ids=[105917761, 595465361], ctx=mock_context)
+        refs = mock_sage_client.check_inventory.call_args_list[0].kwargs["products"]
+        assert [r.productId for r in refs] == [5917761, 5465361]
+
+    async def test_not_found_falls_back_to_supplier_item_num(
+        self, mock_sage_client: AsyncMock, mock_context: AsyncMock
+    ) -> None:
+        """When the derived id misses, resolve suppId+itemNum via detail and
+        retry — so product_ids just work for agents."""
+        from sage_mcp.tools.inventory import check_inventory
+
+        mock_sage_client.check_inventory.side_effect = [
+            InventoryResponse.model_validate(INVENTORY_107_NOT_FOUND),
+            InventoryResponse.model_validate(INVENTORY_107_OK),
+        ]
+        mock_sage_client.get_product_detail.return_value = (
+            ProductDetailResponse.model_validate(DETAIL_RESPONSE_OK)
+        )
+        result = await check_inventory(product_ids=[105917761], ctx=mock_context)
+
+        retry_refs = mock_sage_client.check_inventory.call_args_list[1].kwargs["products"]
+        assert retry_refs[0].sageNum == 60462
+        assert retry_refs[0].itemNum == "DBT-AT19"
+        assert result.products[0].ok is True
+        assert result.products[0].onHand == 56341
+        assert result.products[0].prodEId == 105917761
 
     async def test_supplier_item_num_lookup_without_product_ids(
         self, mock_sage_client: AsyncMock, mock_context: AsyncMock
     ) -> None:
-        """Service 107 alternative lookup: supplier SAGE # + item number."""
         from sage_mcp.tools.inventory import check_inventory
 
         mock_sage_client.check_inventory.return_value = InventoryResponse.model_validate(
-            INVENTORY_RESPONSE_OK
+            INVENTORY_107_OK
         )
         await check_inventory(
             supplier_sage_num=60462, item_num="DBT-AT19", ctx=mock_context
@@ -90,4 +141,4 @@ class TestCheckInventoryTool:
             10701, "Include at least one product in the request."
         )
         with pytest.raises(ToolError):
-            await check_inventory(product_ids=[0], ctx=mock_context)
+            await check_inventory(product_ids=[105917761], ctx=mock_context)
