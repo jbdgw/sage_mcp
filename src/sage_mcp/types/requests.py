@@ -1,8 +1,19 @@
-"""Request payload models for SAGE Connect API services."""
+"""Request payload models for SAGE Connect API services.
+
+Field names match the official SAGE Connect docs exactly (Service 103
+Request Field Layout, 2025-08 revision). ``extra="forbid"`` so invented
+fields fail loudly instead of being silently ignored by SAGE.
+"""
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
+
+SearchSort = Literal["BESTMATCH", "PRICE", "PRICEHIGHLOW", "POPULARITY", "PREFGROUP"]
+
+CategoryListTypeName = Literal["categories", "themes", "esg"]
 
 
 class SearchRec(BaseModel):
@@ -12,46 +23,73 @@ class SearchRec(BaseModel):
     SAGE ``search`` object in the wire payload (camelCase).
     """
 
-    model_config = {"extra": "allow", "populate_by_name": True}
+    model_config = {"extra": "forbid", "populate_by_name": True}
 
     # Core search
-    keywords: str | None = Field(None, description="Free-text keyword search")
-    categories: str | None = Field(None, description="Category name or number")
-    spc: str | None = Field(None, description="SAGE product code")
+    quickSearch: str | None = Field(
+        default=None, description="Smart search — SAGE decides if input is a category, keyword, or SPC"
+    )
+    keywords: str | None = Field(default=None, description="Free-text keyword search")
+    categories: str | None = Field(
+        default=None, description="Category name or number (comma-separated for multiple)"
+    )
+    spc: str | None = Field(default=None, description="SAGE product code")
+    itemNum: str | None = Field(default=None, description="Supplier's actual item number")
+    itemNumExact: bool | None = Field(default=None, description="Exact item number matches only")
+    itemName: str | None = Field(default=None, description="Product's item name")
 
     # Pricing / quantity
-    priceLow: float | None = Field(None, description="Minimum price filter", ge=0)
-    priceHigh: float | None = Field(None, description="Maximum price filter", ge=0)
-    qty: int | None = Field(None, description="Quantity for pricing", gt=0)
+    priceLow: float | None = Field(default=None, description="Minimum price filter", ge=0)
+    priceHigh: float | None = Field(default=None, description="Maximum price filter", ge=0)
+    qty: int | None = Field(default=None, description="Quantity for pricing", gt=0)
+    hideOldPricing: bool | None = Field(default=None, description="Hide pricing on expired products")
 
     # Filters
-    colors: str | None = Field(None, description="Color filter")
-    themes: str | None = Field(None, description="Theme filter")
-    madeIn: str | None = Field(None, description="Two-digit country code")
-    envFriendly: bool | None = Field(None, description="Eco-friendly products only")
-    verified: bool | None = Field(None, description="SAGE-verified products only")
+    colors: str | None = Field(default=None, description="Color filter")
+    themes: str | None = Field(default=None, description="Theme filter")
+    madeIn: str | None = Field(default=None, description="Two-digit country code")
+    envFriendly: bool | None = Field(default=None, description="Eco-friendly products only")
+    recyclable: bool | None = None
+    verified: bool | None = Field(default=None, description="SAGE-verified products only")
+    newProduct: bool | None = None
+    popular: bool | None = Field(default=None, description="Popular items only")
+    esg: str | None = Field(default=None, description="Comma-separated ESG/diversity flag IDs")
+    allAudiences: bool | None = None
+    endUserOnly: bool | None = Field(default=None, description="Only products OK to show end users")
+    unionShop: bool | None = None
+    updatedSince: str | None = Field(default=None, description="ISO 8601 UTC datetime filter")
 
     # Production
-    prodTime: str | None = Field(None, description="Production time filter")
-    productionDays: int | None = Field(None, description="Max production days", gt=0)
+    prodTime: int | None = Field(
+        default=None, description="Production time in working days (0/blank = any)", ge=0
+    )
+    includeRush: bool | None = Field(default=None, description="Include rush-service suppliers")
 
-    # Supplier preferences
-    prefGroups: str | None = Field(None, description="Supplier preference group IDs")
-    supplierFav: str | None = Field(None, description="Supplier favorites filter")
+    # Supplier scoping
+    prefGroups: str | None = Field(default=None, description="Supplier preference group IDs")
+    suppId: int | None = Field(default=None, description="Supplier SAGE # to search within")
+    lineName: str | None = Field(default=None, description="Specific supplier line name")
+    siteCountry: str | None = Field(default=None, description="Two-digit site country code")
 
-    # Advanced
+    # PromoSearch settings
+    applyPsSearchRestrictions: bool | None = None
     applyPsPriceAdjustments: bool | None = Field(
-        None, description="Apply global PromoSearch price adjustments"
+        default=None, description="Apply global PromoSearch price adjustments"
+    )
+
+    # Response shaping
+    sort: SearchSort | None = Field(default=None, description="Sort order (default BESTMATCH)")
+    thumbPicRes: int | None = Field(
+        default=None, description="Thumbnail resolution px: 100/150/200/300/1800 (default 150)"
     )
     extraReturnFields: str | None = Field(
-        None, description="Comma-separated extra fields to return"
+        default=None, description="Comma-separated extra fields — materially increases response size"
     )
-
-    # Pagination / sorting
-    orderBy: str | None = Field(None, description="Sort order for results")
-    pageSize: int | None = Field(None, description="Results per page", gt=0)
-    pageNumber: int | None = Field(None, description="Page number (1-based)", gt=0)
-    limit: int | None = Field(None, description="Max results to return", gt=0)
+    maxTotalItems: int | None = Field(
+        default=None, description="Cap on total matches (SAGE default 1000, max 50000)", gt=0
+    )
+    startNum: int | None = Field(default=None, description="First record to return (1-based)", gt=0)
+    maxRecs: int | None = Field(default=None, description="Max records per page", gt=0)
 
 
 class SearchProductsRequest(BaseModel):
@@ -61,7 +99,7 @@ class SearchProductsRequest(BaseModel):
     apiVer: int = 130
     auth: dict[str, str | int]
     search: dict[str, str | int | float | bool]
-    ref: str | None = Field(None, max_length=15)
+    ref: str | None = Field(default=None, max_length=15)
     endBuyerSearch: bool | None = None
 
 
@@ -72,27 +110,40 @@ class ProductDetailRequest(BaseModel):
     apiVer: int = 130
     auth: dict[str, str | int]
     prodEId: str | int
-    includeSuppInfo: int = Field(1, description="1=include supplier info, 0=exclude")
+    includeSuppInfo: int = Field(default=1, description="1=include supplier info, 0=exclude")
     applyPsPriceAdjustments: bool | None = None
-    ref: str | None = Field(None, max_length=15)
+    ref: str | None = Field(default=None, max_length=15)
+
+
+class InventoryProductRef(BaseModel):
+    """One product to look up in Service 107 — by productId, or sageNum+itemNum."""
+
+    model_config = {"extra": "forbid"}
+
+    productId: int | None = None
+    sageNum: int | None = Field(default=None, description="Supplier's SAGE # (ignored if productId set)")
+    itemNum: str | None = Field(default=None, description="Item number (ignored if productId set)")
 
 
 class InventoryRequest(BaseModel):
-    """Full wire payload for Service 107."""
+    """Full wire payload for Service 107 — takes an ARRAY of products."""
 
     serviceId: int = 107
     apiVer: int = 130
     auth: dict[str, str | int]
-    prodEId: str | int
-    ref: str | None = Field(None, max_length=15)
+    products: list[InventoryProductRef]
+    ref: str | None = Field(default=None, max_length=15)
 
 
 class CategoryRequest(BaseModel):
-    """Full wire payload for Service 101."""
+    """Full wire payload for Service 101 (Research List).
+
+    Valid listType values: "categories", "themes", "esg" — the service
+    returns a flat id/name list with no parent/child hierarchy.
+    """
 
     serviceId: int = 101
     apiVer: int = 130
     auth: dict[str, str | int]
-    listType: str
-    parentId: str | None = None
-    ref: str | None = Field(None, max_length=15)
+    listType: CategoryListTypeName
+    ref: str | None = Field(default=None, max_length=15)

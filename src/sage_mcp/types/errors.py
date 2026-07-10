@@ -21,6 +21,10 @@ class SageErrorCode(IntEnum):
     WORKPLACE_REQUIRED = 10012
     QUERY_LIMIT_REACHED = 10013
 
+    # Research list errors (101xx)
+    LIST_CANNOT_RETURN = 10101
+    LIST_INVALID_TYPE = 10102
+
     # Search errors (103xx)
     SEARCH_INSUFFICIENT_CRITERIA = 10301
     SEARCH_ERROR = 10302
@@ -30,6 +34,9 @@ class SageErrorCode(IntEnum):
     # Detail errors (105xx)
     PRODUCT_NOT_FOUND = 10501
     SUPPLIER_NOT_FOUND = 10502
+
+    # Inventory errors (107xx)
+    INVENTORY_NO_PRODUCTS = 10701
 
 
 _RETRYABLE_CODES = frozenset({

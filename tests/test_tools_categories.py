@@ -35,9 +35,10 @@ class TestGetCategoriesTool:
         )
         result = await get_categories(list_type="categories", ctx=mock_context)
         assert len(result.items) == 2
+        assert result.items[0].id == 118
         assert result.items[0].name == "Flashlights"
 
-    async def test_passes_parent_id_to_client(
+    async def test_esg_list_type_passed_to_client(
         self, mock_sage_client: AsyncMock, mock_context: AsyncMock
     ) -> None:
         from sage_mcp.tools.categories import get_categories
@@ -45,22 +46,9 @@ class TestGetCategoriesTool:
         mock_sage_client.get_categories.return_value = CategoriesResponse.model_validate(
             CATEGORIES_RESPONSE_OK
         )
-        await get_categories(list_type="themes", parent_id="42", ctx=mock_context)
+        await get_categories(list_type="esg", ctx=mock_context)
         call_args = mock_sage_client.get_categories.call_args
-        assert call_args.kwargs["list_type"] == "themes"
-        assert call_args.kwargs["parent_id"] == "42"
-
-    async def test_parent_id_defaults_to_none(
-        self, mock_sage_client: AsyncMock, mock_context: AsyncMock
-    ) -> None:
-        from sage_mcp.tools.categories import get_categories
-
-        mock_sage_client.get_categories.return_value = CategoriesResponse.model_validate(
-            CATEGORIES_RESPONSE_OK
-        )
-        await get_categories(list_type="categories", ctx=mock_context)
-        call_args = mock_sage_client.get_categories.call_args
-        assert call_args.kwargs["parent_id"] is None
+        assert call_args.kwargs["list_type"] == "esg"
 
     async def test_api_error_raises_tool_error(
         self, mock_sage_client: AsyncMock, mock_context: AsyncMock
@@ -70,7 +58,7 @@ class TestGetCategoriesTool:
         from sage_mcp.tools.categories import get_categories
 
         mock_sage_client.get_categories.side_effect = SageAPIError(
-            10001, "General system error"
+            10102, "Invalid list type. Please check listType parameter"
         )
         with pytest.raises(ToolError):
             await get_categories(list_type="categories", ctx=mock_context)

@@ -2,19 +2,32 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Sequence
 
 import httpx
 
 from sage_mcp.settings import SageSettings
 from sage_mcp.types.errors import SageAPIError
-from sage_mcp.types.requests import SearchRec
+from sage_mcp.types.requests import CategoryListTypeName, InventoryProductRef, SearchRec
 from sage_mcp.types.responses import (
     CategoriesResponse,
     InventoryResponse,
     ProductDetailResponse,
     SearchResponse,
 )
+
+
+def _extract_error(data: dict[str, Any]) -> tuple[int, str]:
+    """Pull the error code/message from a SAGE response.
+
+    SAGE returns lowercase ``errNum``/``errMsg`` (sometimes as numeric
+    strings, e.g. ``"10701"``); older docs show ``ErrNum``/``ErrMsg``,
+    so both spellings are accepted.
+    """
+    raw = data.get("errNum", data.get("ErrNum", 0))
+    err_num = int(raw) if raw not in (None, "") else 0
+    err_msg = str(data.get("errMsg") or data.get("ErrMsg") or "Unknown error")
+    return err_num, err_msg
 
 
 class SageClient:
@@ -34,7 +47,7 @@ class SageClient:
     async def _post(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Send a POST to the SAGE API and return parsed JSON.
 
-        Raises SageAPIError if the response contains ErrNum != 0.
+        Raises SageAPIError if the response contains a non-zero errNum.
         """
         response = await self._http.post(
             self._settings.api_url,
@@ -44,12 +57,9 @@ class SageClient:
         response.raise_for_status()
         data: dict[str, Any] = response.json()
 
-        err_num = data.get("ErrNum", 0)
+        err_num, err_msg = _extract_error(data)
         if err_num != 0:
-            raise SageAPIError(
-                err_num=int(err_num),
-                err_msg=str(data.get("ErrMsg", "Unknown error")),
-            )
+            raise SageAPIError(err_num=err_num, err_msg=err_msg)
         return data
 
     async def search_products(self, search: SearchRec) -> SearchResponse:
@@ -69,7 +79,7 @@ class SageClient:
         prod_eid: int | str,
         include_supplier_info: bool = True,
     ) -> ProductDetailResponse:
-        """Service 105 — Product Detail."""
+        """Service 105 — Product Detail (also returns live inventory)."""
         payload: dict[str, Any] = {
             "serviceId": 105,
             "apiVer": self._settings.api_version,
@@ -80,30 +90,26 @@ class SageClient:
         data = await self._post(payload)
         return ProductDetailResponse.model_validate(data)
 
-    async def check_inventory(self, product_id: str) -> InventoryResponse:
-        """Service 107 — Inventory Check."""
+    async def check_inventory(
+        self, products: Sequence[InventoryProductRef]
+    ) -> InventoryResponse:
+        """Service 107 — Inventory Status (batch: one request, many products)."""
         payload: dict[str, Any] = {
             "serviceId": 107,
             "apiVer": self._settings.api_version,
             "auth": self._build_auth(),
-            "prodEId": product_id,
+            "products": [p.model_dump(exclude_none=True) for p in products],
         }
         data = await self._post(payload)
         return InventoryResponse.model_validate(data)
 
-    async def get_categories(
-        self,
-        list_type: str,
-        parent_id: str | None = None,
-    ) -> CategoriesResponse:
-        """Service 101 — Category/Theme/Color Lists."""
+    async def get_categories(self, list_type: CategoryListTypeName) -> CategoriesResponse:
+        """Service 101 — Research List (categories/themes/esg)."""
         payload: dict[str, Any] = {
             "serviceId": 101,
             "apiVer": self._settings.api_version,
             "auth": self._build_auth(),
             "listType": list_type,
         }
-        if parent_id is not None:
-            payload["parentId"] = parent_id
         data = await self._post(payload)
         return CategoriesResponse.model_validate(data)

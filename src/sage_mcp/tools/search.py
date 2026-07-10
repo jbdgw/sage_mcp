@@ -10,16 +10,26 @@ from pydantic import Field
 
 from sage_mcp.client.sage_client import SageClient
 from sage_mcp.types.errors import SageAPIError
-from sage_mcp.types.requests import SearchRec
+from sage_mcp.types.requests import SearchRec, SearchSort
 from sage_mcp.types.responses import SearchResponse
 
-_DEFAULT_EXTRA_FIELDS = "ITEMNUM,CATEGORY,DESCRIPTION,COLORS,THEMES,SUPPLIER,SUPPID,LINE,PRODTIME"
+# Small extras on by default; DESCRIPTION/COLORS/THEMES are opt-in because
+# they roughly triple per-product payload size.
+_LEAN_EXTRA_FIELDS = "ITEMNUM,CATEGORY,SUPPLIER,SUPPID,LINE,PRODTIME"
+_VERBOSE_EXTRA_FIELDS = _LEAN_EXTRA_FIELDS + ",DESCRIPTION,COLORS,THEMES"
+
+_MAX_LIMIT = 100
 
 
 async def search_products(
     keywords: Annotated[str | None, Field(description="Free-text keyword search")] = None,
+    quick_search: Annotated[
+        str | None,
+        Field(description="Smart search — SAGE auto-detects category vs keyword vs SPC"),
+    ] = None,
     categories: Annotated[str | None, Field(description="Category name or number")] = None,
     spc: Annotated[str | None, Field(description="SAGE product code")] = None,
+    item_num: Annotated[str | None, Field(description="Supplier's item number")] = None,
     price_low: Annotated[float | None, Field(description="Minimum price filter")] = None,
     price_high: Annotated[float | None, Field(description="Maximum price filter")] = None,
     qty: Annotated[int | None, Field(description="Quantity for pricing")] = None,
@@ -28,26 +38,46 @@ async def search_products(
     made_in: Annotated[str | None, Field(description="Two-digit country code")] = None,
     env_friendly: Annotated[bool | None, Field(description="Eco-friendly only")] = None,
     verified: Annotated[bool | None, Field(description="SAGE-verified only")] = None,
-    prod_time: Annotated[str | None, Field(description="Production time filter")] = None,
-    production_days: Annotated[int | None, Field(description="Max production days")] = None,
-    order_by: Annotated[str | None, Field(description="Sort order")] = None,
-    page_size: Annotated[int | None, Field(description="Results per page")] = None,
-    page_number: Annotated[int | None, Field(description="Page number (1-based)")] = None,
-    limit: Annotated[int | None, Field(description="Max results to return")] = None,
+    esg: Annotated[
+        str | None,
+        Field(description="Comma-separated ESG flag IDs (from get_categories esg list)"),
+    ] = None,
+    production_days: Annotated[
+        int | None, Field(description="Production time in working days")
+    ] = None,
+    supplier_id: Annotated[
+        int | None, Field(description="Restrict to one supplier's SAGE #")
+    ] = None,
+    line_name: Annotated[str | None, Field(description="Supplier line name filter")] = None,
+    sort: Annotated[
+        SearchSort | None,
+        Field(description="Sort order: BESTMATCH (default), PRICE, PRICEHIGHLOW, POPULARITY, PREFGROUP"),
+    ] = None,
+    limit: Annotated[
+        int, Field(description="Results per page (1-100)", ge=1, le=_MAX_LIMIT)
+    ] = 25,
+    page: Annotated[int, Field(description="Page number (1-based)", ge=1)] = 1,
+    include_descriptions: Annotated[
+        bool,
+        Field(description="Include DESCRIPTION/COLORS/THEMES per product (~3x payload)"),
+    ] = False,
     *,
     ctx: Context,
 ) -> SearchResponse:
     """Search the SAGE promotional products catalog.
 
-    Provide at least one search criterion (keywords, categories, or spc).
-    Returns matching products with pricing, thumbnails, and metadata.
+    Provide at least one criterion (keywords, quick_search, categories, or spc).
+    Returns one page of results (default 25); totalFound reports the full match
+    count so you can paginate with the page parameter.
     """
     client: SageClient = ctx.lifespan_context["sage_client"]
 
     search = SearchRec(
         keywords=keywords,
+        quickSearch=quick_search,
         categories=categories,
         spc=spc,
+        itemNum=item_num,
         priceLow=price_low,
         priceHigh=price_high,
         qty=qty,
@@ -56,13 +86,14 @@ async def search_products(
         madeIn=made_in,
         envFriendly=env_friendly,
         verified=verified,
-        prodTime=prod_time,
-        productionDays=production_days,
-        orderBy=order_by,
-        pageSize=page_size,
-        pageNumber=page_number,
-        limit=limit,
-        extraReturnFields=_DEFAULT_EXTRA_FIELDS,
+        esg=esg,
+        prodTime=production_days,
+        suppId=supplier_id,
+        lineName=line_name,
+        sort=sort,
+        maxRecs=limit,
+        startNum=(page - 1) * limit + 1,
+        extraReturnFields=_VERBOSE_EXTRA_FIELDS if include_descriptions else _LEAN_EXTRA_FIELDS,
     )
     try:
         return await client.search_products(search)

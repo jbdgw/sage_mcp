@@ -17,26 +17,25 @@ SupplierId = Annotated[int, Field(description="SAGE supplier ID")]
 
 
 class CategoryListType(StrEnum):
-    """Service 101 list types."""
+    """Service 101 list types (per docs: categories, themes, esg)."""
 
     CATEGORIES = "categories"
     THEMES = "themes"
-    COLORS = "colors"
-    ESG_FLAGS = "esg-flags"
+    ESG = "esg"
 
 
-class SearchOrderBy(StrEnum):
-    """Sort options for product search results."""
+class SearchSortOrder(StrEnum):
+    """Sort options accepted by Service 103 ``sort`` field."""
 
-    RELEVANCE = "relevance"
-    PRICE_LOW = "priceLow"
-    PRICE_HIGH = "priceHigh"
-    NAME = "name"
-    SUPPLIER = "supplier"
+    BESTMATCH = "BESTMATCH"
+    PRICE = "PRICE"
+    PRICEHIGHLOW = "PRICEHIGHLOW"
+    POPULARITY = "POPULARITY"
+    PREFGROUP = "PREFGROUP"
 
 
 class ImageSize(IntEnum):
-    """Pixel sizes accepted by the SAGE image CDN."""
+    """Pixel sizes accepted by the SAGE image CDN (RS= query param)."""
 
     SMALL = 100
     THUMBNAIL = 150

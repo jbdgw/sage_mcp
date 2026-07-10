@@ -36,13 +36,19 @@ _INSTRUCTIONS = """\
 SAGE Connect promotional products API server.
 
 Available tools:
-- search_products: Search the SAGE catalog by keywords, categories, price, color, etc.
-- get_product_detail: Get full details for a product by entity ID or SPC code.
-- check_inventory: Check real-time inventory and stock levels.
-- get_categories: Browse product categories, themes, colors, and ESG flags.
-- get_product_images: Get all images for a product.
+- search_products: Search the SAGE catalog. Returns 25 lean results per page by
+  default — paginate with the page param, raise limit up to 100, and set
+  include_descriptions=true only when you need per-product description text.
+- get_product_detail: Full details by entity ID or SPC — pricing tiers (catalog
+  + net cost), decoration charges, carton specs, supplier contacts, images, and
+  LIVE INVENTORY (onHand + per-variant skus). Set include_images=false to trim.
+- check_inventory: Batch real-time stock check by product IDs. Skip it if you
+  just called get_product_detail — detail already includes inventory.
+- get_categories: Research lists (categories, themes, esg flags) as {id, name};
+  use ids/names as search_products filters.
+- get_product_images: All images for a product (url, hasLogo, caption).
 
-Typical workflow: search → detail → inventory check.
+Typical workflow: search (lean page) → detail for the shortlisted products.
 """
 
 mcp = FastMCP(

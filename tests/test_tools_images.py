@@ -33,9 +33,11 @@ class TestGetProductImagesTool:
         mock_sage_client.get_product_detail.return_value = (
             ProductDetailResponse.model_validate(DETAIL_RESPONSE_OK)
         )
-        result = await get_product_images(prod_eid="345733702", ctx=mock_context)
+        result = await get_product_images(prod_eid="105917761", ctx=mock_context)
         assert len(result) == 2
-        assert result[0].url == "https://example.com/pic1.jpg"
+        assert result[0].url == (
+            "https://www.promoplace.com/ws/ws.dll/QPic?SN=60462&P=105917761&RS=300&I=1"
+        )
         assert result[0].hasLogo == 1
 
     async def test_empty_pics_returns_empty_list(
