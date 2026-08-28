@@ -26,6 +26,12 @@ wire format; never "simplify" them back to the documented one.** Highlights:
 - Service 107 productId = 9-digit prodEId minus its 2-digit prefix; some
   records emit malformed JSON (see `_parse_response_json` + tool isolation).
 - Service 105 detail already embeds live inventory.
+- **Optional numerics arrive as `""` when SAGE has no figure** — a bare `int`
+  raises `int_parsing` and one blank kills the whole response (cost this a
+  live outage 2026-08-28). Never declare a new SAGE int as bare `int`: use
+  `BlankAsNone` (measured values — `None` = no figure, `0` = known-empty,
+  never collapse them) or `BlankAsZero`/`BlankAsOne` (flags/ids). Required
+  ids stay bare `int`. See the `types/responses.py` module docstring.
 
 ## Compatibility
 
