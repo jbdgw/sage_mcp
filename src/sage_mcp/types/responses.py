@@ -10,13 +10,73 @@ Alias note: SAGE returns most ``extraReturnFields`` keys UPPERCASE
 ``line``) — observed live 2026-07-09, diverging from the docs. Every
 field therefore validates against AliasChoices covering both, and
 serializes by clean field name.
+
+Blank numerics: SAGE sends ``""`` on optional numeric fields to mean "we
+have no figure" — observed live 2026-08-28 on ``onHand`` for prodEIds
+325484683 and 796511591, both of which publish full net pricing. A plain
+``int`` field raises ``int_parsing`` on that blank (a ``default=`` does NOT
+rescue it), and one blank takes the entire response down, so downstream
+callers see a parse failure that is indistinguishable from "this supplier
+publishes no cost". **Never declare a new SAGE integer as a bare ``int``.**
+Use one of:
+
+- ``BlankAsNone`` — anything measured (stock, counts, optional ids), where
+  a blank genuinely means unknown. ``None`` and ``0`` stay distinct: ``None``
+  = SAGE has no figure, ``0`` = known-empty. Collapsing them turns "unknown
+  stock" into a false out-of-stock claim, so nothing may derive
+  "unlimited"/"in stock" from a ``None``.
+- ``BlankAsZero`` / ``BlankAsOne`` — non-optional flags and ids whose
+  absent-value really is that default (``hasLogo``, ``suppId``, ``active``).
+
+Garbage still fails: only whitespace-only strings normalize, ``"abc"``
+raises. These are not general "coerce anything" validators. Required
+identifiers (``prodEId``, ``CategoryItem.id``) stay bare ``int`` — a blank
+there is a real error, not a missing figure.
 """
 
 from __future__ import annotations
 
-from pydantic import AliasChoices, BaseModel, Field
+from typing import Annotated
+
+from pydantic import AliasChoices, BaseModel, BeforeValidator, Field
 
 _PROD_EID_ALIAS = AliasChoices("prodEId", "prodEid")
+
+
+# --- Blank-numeric normalization (see module docstring) ---
+
+
+def _blank_to_none(v: object) -> object:
+    """SAGE sends "" for "we have no figure" on optional numerics — that is unknown, not zero.
+
+    Only whitespace-only strings become None; "abc" is still a validation error, and a real 0
+    still means "known, none in stock". Scoped to SAGE response models by construction.
+    """
+    if isinstance(v, str) and not v.strip():
+        return None
+    return v
+
+
+def _blank_to_default(default: int) -> object:
+    """Build a validator mapping blank/absent → ``default`` for non-optional flag/id ints."""
+
+    def _coerce(v: object) -> object:
+        return default if _blank_to_none(v) is None else v
+
+    return BeforeValidator(_coerce)
+
+
+BlankAsNone = Annotated[int | None, BeforeValidator(_blank_to_none)]
+"""Optional SAGE integer: "" / "   " / absent → None; "123" → 123; "abc" → ValidationError.
+
+Use for anything measured (stock, counts, optional ids) where absence is genuinely unknown.
+"""
+
+BlankAsZero = Annotated[int, _blank_to_default(0)]
+"""Non-optional SAGE integer whose absent-value is 0 anyway (flags, ids, counts) — never stock."""
+
+BlankAsOne = Annotated[int, _blank_to_default(1)]
+"""Non-optional SAGE integer defaulting to 1 (``active``), so a blank cannot flip it to 0."""
 
 # --- Search (Service 103) ---
 
@@ -48,7 +108,7 @@ class ProductSearchHit(BaseModel):
     colors: str | None = Field(default=None, validation_alias=AliasChoices("COLORS", "colors"))
     themes: str | None = Field(default=None, validation_alias=AliasChoices("THEMES", "themes"))
     supplier: str | None = Field(default=None, validation_alias=AliasChoices("SUPPLIER", "supplier"))
-    suppId: int | None = Field(
+    suppId: BlankAsNone = Field(
         default=None, validation_alias=AliasChoices("suppID", "SUPPID", "suppId"),
         description="Supplier's SAGE ID",
     )
@@ -63,7 +123,7 @@ class SearchResponse(BaseModel):
 
     ok: bool = False
     searchResponseMsg: str = ""
-    totalFound: int = Field(default=0, description="Total matches (capped by maxTotalItems)")
+    totalFound: BlankAsZero = Field(default=0, description="Total matches (capped by maxTotalItems)")
     products: list[ProductSearchHit] = Field(default=[])
     legalNote: str = ""
 
@@ -76,7 +136,7 @@ class SkuAttribute(BaseModel):
 
     model_config = {"extra": "ignore"}
 
-    typeId: int = 0
+    typeId: BlankAsZero = 0
     name: str = ""
     value: str = ""
 
@@ -87,11 +147,16 @@ class SkuRecord(BaseModel):
     model_config = {"extra": "ignore"}
 
     attributes: list[SkuAttribute] = Field(default=[])
-    onHand: int = Field(default=0, description="Units on hand (999,999,999 = unlimited)")
-    onOrder: int = 0
+    onHand: BlankAsNone = Field(
+        default=None,
+        description="Units on hand; null = SAGE published no figure (999,999,999 = unlimited)",
+    )
+    onOrder: BlankAsNone = Field(
+        default=None, description="Units on order; null = no figure published"
+    )
     onOrderExpectedDate: str | None = None
-    refreshLeadDays: int | None = None
-    warehouseId: int | None = None
+    refreshLeadDays: BlankAsNone = None
+    warehouseId: BlankAsNone = None
     warehouseCountry: str = ""
     warehouseZip: str = ""
     memo: str = ""
@@ -110,7 +175,7 @@ class SupplierInfo(BaseModel):
 
     model_config = {"extra": "ignore", "populate_by_name": True}
 
-    suppId: int = Field(default=0, description="Supplier's SAGE ID")
+    suppId: BlankAsZero = Field(default=0, description="Supplier's SAGE ID")
     coName: str = Field(default="", description="Company name")
     lineName: str = ""
     contactName: str = Field(default="", description="Contact person")
@@ -140,9 +205,9 @@ class ProductImage(BaseModel):
     model_config = {"extra": "ignore"}
 
     url: str = Field(default="", description="Image URL (RS= query param sets pixel size)")
-    hasLogo: int = Field(default=0, description="1=with logo sample, 0=blank product")
+    hasLogo: BlankAsZero = Field(default=0, description="1=with logo sample, 0=blank product")
     caption: str = Field(default="", description="Image caption (often the color)")
-    index: int = 0
+    index: BlankAsZero = 0
 
 
 class OptionValue(BaseModel):
@@ -161,7 +226,7 @@ class ProductOption(BaseModel):
     model_config = {"extra": "ignore"}
 
     name: str = ""
-    pricingIsTotal: int = 0
+    pricingIsTotal: BlankAsZero = 0
     priceCode: str = ""
     values: list[OptionValue] = Field(default=[])
 
@@ -181,7 +246,7 @@ class ProductDetail(BaseModel):
     keywords: str = ""
     colors: str = ""
     themes: str = ""
-    suppId: int = Field(default=0, description="Supplier's SAGE ID")
+    suppId: BlankAsZero = Field(default=0, description="Supplier's SAGE ID")
     lineName: str = ""
 
     # Pricing (parallel arrays, indexes align with qty)
@@ -223,23 +288,26 @@ class ProductDetail(BaseModel):
     shipPointZip: str = ""
 
     # Flags / compliance
-    verified: int = 0
-    envFriendly: int = 0
-    recyclable: int = 0
-    newProduct: int = 0
+    verified: BlankAsZero = 0
+    envFriendly: BlankAsZero = 0
+    recyclable: BlankAsZero = 0
+    newProduct: BlankAsZero = 0
     productCompliance: str = ""
     warningLbl: str = ""
 
     # Live inventory (also available standalone via Service 107)
-    onHand: int = Field(default=0, description="Total units on hand across variants")
+    onHand: BlankAsNone = Field(
+        default=None,
+        description="Total units on hand across variants; null = SAGE published no figure",
+    )
     skus: list[SkuRecord] = Field(default=[])
     inventoryLastUpdated: str = ""
 
     # Lifecycle
     comment: str = ""
     expDate: str = Field(default="", description="Pricing expiration date")
-    discontinued: int = 0
-    active: int = 1
+    discontinued: BlankAsZero = 0
+    active: BlankAsOne = 1
 
     pics: list[ProductImage] = Field(default=[], description="Product images")
     supplier: SupplierInfo | None = None
@@ -284,14 +352,17 @@ class InventoryProduct(BaseModel):
 
     model_config = {"extra": "ignore"}
 
-    productId: int = Field(default=0, description="SAGE-internal Service 107 product ID")
+    productId: BlankAsZero = Field(default=0, description="SAGE-internal Service 107 product ID")
     prodEId: int | None = Field(
         default=None, description="The prodEId this entry answers (set by the MCP server)"
     )
-    sageNum: int | None = Field(default=None, description="Supplier's SAGE #")
+    sageNum: BlankAsNone = Field(default=None, description="Supplier's SAGE #")
     itemNum: int | str | None = Field(default=None, description="Supplier's item number")
     ok: bool | None = None
-    onHand: int = Field(default=0, description="Total units on hand (999,999,999 = unlimited)")
+    onHand: BlankAsNone = Field(
+        default=None,
+        description="Total units on hand; null = SAGE published no figure (999,999,999 = unlimited)",
+    )
     skus: list[SkuRecord] = Field(default=[])
     lastUpdated: str = ""
 

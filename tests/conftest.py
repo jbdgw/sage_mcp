@@ -252,3 +252,26 @@ ERROR_RESPONSE_LEGACY_UPPERCASE: dict[str, Any] = {
     "ErrNum": 10008,
     "ErrMsg": "Incorrect AcctID, LoginID or Token",
 }
+
+
+# Real Service 105 shape for a supplier that publishes pricing but NO stock figure:
+# onHand comes back as "" (not 0, not absent). Verified live 2026-08-28 against
+# prodEId 325484683 (Bath Promotions CANDLE-14B-S-BOX-E). Before the BlankAsNone
+# fix this blank raised int_parsing and took the whole response — and with it the
+# net pricing below — down with it. Keep the "" literal; it is the wire truth.
+DETAIL_RESPONSE_BLANK_ONHAND: dict[str, Any] = {
+    "product": {
+        "prodEId": 325484683,
+        "spc": "CANDLE-14B-S-BOX-E",
+        "itemNum": "CANDLE-14B-S-BOX-E",
+        "prName": "14 oz. Candle in Gift Box",
+        "suppId": 62258,
+        "qty": ["50", "100", "250", "500", "1000", "2500"],
+        "prc": ["36.00", "34.00", "33.75", "33.50", "33.25", "33.00"],
+        "net": ["21.60", "20.40", "20.25", "20.10", "19.95", "19.80"],
+        "onHand": "",
+        "skus": [],
+        "inventoryLastUpdated": "",
+    },
+    "legalNote": "ALL DATA (C) 2026 SAGE.",
+}
