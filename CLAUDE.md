@@ -33,6 +33,15 @@ wire format; never "simplify" them back to the documented one.** Highlights:
   never collapse them) or `BlankAsZero`/`BlankAsOne` (flags/ids). Required
   ids stay bare `int`. See the `types/responses.py` module docstring.
 
+## Consumers
+
+`docs/CONSUMER_NOTICE_2026-08-28_blank_numerics.md` is the hand-off written for
+agents/apps that call this server — what the `onHand: null` contract change
+means and what to check on their side. Hand it over when someone asks why a
+SAGE field changed shape. Known consumers: the KB's sourcing grid + presentation
+cost resolution (`dgw_knowledgebase/app/lib/sage.ts`), `check_price`,
+`check_inventory`, product_source's grid search.
+
 ## Compatibility
 
 `search_products` keeps deprecated `page_size`/`page_number` aliases —
