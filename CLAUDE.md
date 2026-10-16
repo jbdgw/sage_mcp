@@ -40,7 +40,15 @@ agents/apps that call this server — what the `onHand: null` contract change
 means and what to check on their side. Hand it over when someone asks why a
 SAGE field changed shape. Known consumers: the KB's sourcing grid + presentation
 cost resolution (`dgw_knowledgebase/app/lib/sage.ts`), `check_price`,
-`check_inventory`, product_source's grid search.
+`check_inventory`, product_source's grid search; **the DGW Studio**
+(`dgw_product_platform/apps/order/app/lib/sage.ts` — `search_products`,
+`get_product_detail` behind its grid, `search_sage` / `get_product` MCP tools)
+and, since 2026-10-16 (DGWDEV-76), **the Studio bridge**
+(`apps/order/app/lib/mcp/tools/bridge.ts`) forwarding `get_categories`
+(`list_type`) and `get_product_images` (`prod_eid`) to ChatGPT as
+`sage_get_categories` / `sage_get_product_images` with the same field names —
+a rename here answers ChatGPT with this server's own error text; change both
+sides the same day.
 
 ## Compatibility
 
